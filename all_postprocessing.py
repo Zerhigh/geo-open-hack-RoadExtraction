@@ -26,16 +26,10 @@ from skimage.morphology import remove_small_objects, skeletonize
 from tqdm import tqdm
 from utils import flatten
 
-"""
-    function adapted from selim_sef's solutiom to spacenet challenge 3
-    used for postprocessing stitched images and creating the spacenet challenge 3 submission file
-    https://github.com/SpaceNetChallenge/RoadDetector/blob/0a7391f546ab20c873dc6744920deef22c21ef3e/selim_sef-solution/tools/vectorize.py
-"""
-
 
 def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilation=25, return_ske=False):
     """
-        function adapted from selim_sef's solutiom to spacenet challenge 3
+        this function and all function used in it are adapted from selim_sef's solution to spacenet challenge 3
         used for postprocessing stitched images and creating the spacenet challenge 3 submission file
         https://github.com/SpaceNetChallenge/RoadDetector/blob/0a7391f546ab20c873dc6744920deef22c21ef3e/selim_sef-solution/tools/vectorize.py
     """
@@ -53,9 +47,6 @@ def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilati
     mask, _ = ndimage.label(mask)
     mask = remove_small_objects(mask, small_obj_size1)
     mask[mask > 0] = 1
-    # ret_image = mask.copy()
-    # ret_image[ret_image>0] = 255
-    # cv2.imwrite('img_postproc_wo_dilation.png', ret_image)
 
     base = np.zeros((1300, 1300))
     ske = np.array(skeletonize(mask), dtype="uint8")
@@ -101,10 +92,8 @@ def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilati
                 coords.insert(0, end)
                 coords.append(start)
             coords = simplify_coords(coords, 2.0)
-            # print(coords)
             all_coords.append(coords)
 
-    # print(all_coords)
     for coords in all_coords:
         if len(coords) > 0:
             line_obj = LineString(coords)
@@ -119,7 +108,7 @@ def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilati
     # return skeleton too
     ske[ske > 0] = 255
 
-    return line_strings, lengths, np.uint8(ske), graph  #, buffered_arr #ret_mask[8:1308, 8:1308]
+    return line_strings, lengths, np.uint8(ske), graph
 
 
 def remove_duplicates(lines):
@@ -203,20 +192,17 @@ def cut(line, distance):
                 LineString([(cp.x, cp.y)] + coords[i:])]
 
 
-def skeletonize_segmentations(image_path, save_submissions, save_graph, save_skeleton, save_mask, plot=False, single=False):
+def skeletonize_segmentations(image_path, save_submissions, save_graph, save_skeleton, save_mask, plot=False,
+                              single=False):
     """
-    receives: data paths, save paths, booleans for plotting
-    returns: True, saves submission file, graph file, skeletonised result file
-    Applies post-processing steps to a segmentation result
+        receives: data paths, save paths, booleans for plotting
+        returns: True, saves submission file, graph file, skeletonised result file
+        Applies post-processing steps to a segmentation result
     """
 
     iterating = os.listdir(image_path)
-    #all_files_done = os.listdir(save_graph)
     skel1 = time.time()
     for image in tqdm(iterating):
-        # if image != 'AOI_4_Shanghai_PS-MS_img1185_00_00.png':
-        #     continue
-        # isolate image name
         image_name = image[:-10]
         img = np.asarray(Image.open(f'{image_path}/{image}'))
 
@@ -248,65 +234,65 @@ def skeletonize_segmentations(image_path, save_submissions, save_graph, save_ske
     return
 
 
-def skeltonize_masks(image_path, save_path, plot=False):
-    """
-        receives: data paths, save paths
-        returns: True
-        saves mask files as pickles
-    """
+# def skeltonize_masks(image_path, save_path, plot=False):
+#     """
+#         receives: data paths, save paths
+#         returns: True
+#         saves mask files as pickles
+#     """
+#
+#     for image in tqdm(os.listdir(image_path)):
+#         # create base array to compensate graph construction in inflated array from image operations
+#         base = np.zeros((1332, 1332))
+#         img = np.asarray(Image.open(f'{image_path}/{image}'))
+#         base[16:1316, 16:1316] += img
+#
+#         # skeltonize and create graph
+#         ske = np.array(skeletonize(img), dtype="uint8")
+#         graph = sknw.build_sknw(ske, multi=True)
+#
+#         # pickle graph and rename mask name
+#         pickle.dump(graph, open(f'{save_path}/{os.path.splitext(image)[0]}.pickle', 'wb'))
+#     return True
 
-    for image in tqdm(os.listdir(image_path)):
-        # cerate base array to compensate graph construction in inflated array fro image operations
-        base = np.zeros((1332, 1332))
-        img = np.asarray(Image.open(f'{image_path}/{image}'))
-        base[16:1316, 16:1316] += img
-        # skeltonize and create graph
-        ske = np.array(skeletonize(img), dtype="uint8") # base
-        #ske[ske > 0] = 1
-        graph = sknw.build_sknw(ske, multi=True)
-        # pickle graph and rename mask name
-        pickle.dump(graph, open(f'{save_path}/{os.path.splitext(image)[0]}.pickle', 'wb'))
-    return True
 
-
-def compare_GED_graphs(gp_graphs_path, gt_graphs_path, take_first_result, max_time, out_path):
-    """
-        receives: path to ground truth and proposal graphs, booleans for evaluation, saving path for result
-        returns: True
-        Calculates the GED for each graph in a directory.
-    """
-
-    t_OGED1 = time.time()
-    all_results = {}
-    # iterate over all graphs
-    for gp_graph_name in tqdm(os.listdir(gp_graphs_path)):
-        gt_graph_name = gp_graph_name # + '.pickle' # gp_graph_name.replace('_00_00', '')
-        # print(f'{gt_graphs_path}/{gt_graph_name}')
-        if os.path.exists(f'{gt_graphs_path}/{gt_graph_name}'):
-            # access graphs
-            gp_graph, gt_graph = pickle.load(open(f'{gp_graphs_path}{gp_graph_name}', 'rb')), pickle.load(open(f'{gt_graphs_path}{gt_graph_name}', 'rb'))
-
-            # calculate first GED iteration
-            iterations = 0
-            for v in nx.optimize_graph_edit_distance(gp_graph, gt_graph):
-                min_result = v
-                iterations += 1
-                if take_first_result:
-                    break
-        else:
-            pass
-
-        # save results
-        all_results[gt_graph_name] = min_result #GED #min_result
-
-    # determine mean and save to file
-    print(sorted(all_results.values()))
-    mean_GED = statistics.mean(all_results.values())
-    with open(f'{out_path}/NEW_GED{str(round(mean_GED, 2)).replace(".", "_")}.json', 'w') as f:
-        json.dump(all_results, f)
-    t_OGED2 = time.time()
-    print(f'mean Graph Edit Distance (GD): {round(mean_GED, 2)} in {round(t_OGED2 - t_OGED1, 2)}s')
-    return True
+# def compare_GED_graphs(gp_graphs_path, gt_graphs_path, take_first_result, max_time, out_path):
+#     """
+#         receives: path to ground truth and proposal graphs, booleans for evaluation, saving path for result
+#         returns: True
+#         Calculates the GED for each graph in a directory.
+#     """
+#
+#     t_OGED1 = time.time()
+#     all_results = {}
+#     # iterate over all graphs
+#     for gp_graph_name in tqdm(os.listdir(gp_graphs_path)):
+#         gt_graph_name = gp_graph_name
+#         if os.path.exists(f'{gt_graphs_path}/{gt_graph_name}'):
+#             # access graphs
+#             gp_graph, gt_graph = pickle.load(open(f'{gp_graphs_path}{gp_graph_name}', 'rb')), pickle.load(open(f'{gt_graphs_path}{gt_graph_name}', 'rb'))
+#
+#             # calculate first GED iteration
+#             iterations = 0
+#             for v in nx.optimize_graph_edit_distance(gp_graph, gt_graph):
+#                 min_result = v
+#                 iterations += 1
+#                 if take_first_result:
+#                     break
+#         else:
+#             pass
+#
+#         # save results
+#         all_results[gt_graph_name] = min_result
+#
+#     # determine mean and save to file
+#     mean_GED = statistics.mean(all_results.values())
+#
+#     with open(f'{out_path}/NEW_GED{str(round(mean_GED, 2)).replace(".", "_")}.json', 'w') as f:
+#         json.dump(all_results, f)
+#     t_OGED2 = time.time()
+#     print(f'mean Graph Edit Distance (GD): {round(mean_GED, 2)} in {round(t_OGED2 - t_OGED1, 2)}s')
+#     return True
 
 
 def graph_to_gdfs(G, nodes=True, edges=True, node_geometry=True, fill_edge_geometry=True):
@@ -351,14 +337,14 @@ def graph_to_gdfs(G, nodes=True, edges=True, node_geometry=True, fill_edge_geome
             if node_geometry:
                 gdf_nodes['geometry'] = gdf_nodes.apply(lambda row: Point(row['o'][0], row['o'][1]), axis=1)
 
-            # appl crs change here
-            #gdf_nodes.crs = G.graph['crs']
+            # apply crs change here if wanted
+            # gdf_nodes.crs = G.graph['crs']
 
             to_return.append(gdf_nodes)
         else:
             print('no nodes detected')
 
-    # not used
+    # not used during postprocessing
     if edges:
         start_time = time.time()
 
@@ -386,8 +372,6 @@ def graph_to_gdfs(G, nodes=True, edges=True, node_geometry=True, fill_edge_geome
 
         # create a GeoDataFrame from the list of edges and set the CRS
         gdf_edges = gpd.GeoDataFrame(edges)
-        #gdf_edges.crs = G.graph['crs']
-        #gdf_edges.gdf_name = '{}_edges'.format(G.graph['name'])
 
         to_return.append(gdf_edges)
         # print('Created GeoDataFrame "{}" from graph in {:,.2f} seconds'.format(gdf_edges.gdf_name, time.time()-start_time))
@@ -448,7 +432,6 @@ def clean_intersections(G, tolerance=15, dead_ends=False):
     # create a GeoDataFrame of nodes, buffer to passed-in distance, merge
     # overlaps
     gdf_nodes = graph_to_gdfs(G, edges=False)
-    #print(gdf_nodes)
     buffered_nodes = gdf_nodes.buffer(tolerance).unary_union
     if isinstance(buffered_nodes, Polygon):
         # if only a single node results, make it iterable so we can turn it
@@ -468,8 +451,6 @@ def clean_intersections(G, tolerance=15, dead_ends=False):
             if polygon.contains(row['geometry']):
                 mappings[last_index+index].append(i)
 
-    #print(mappings)
-
     unified_intersections = gpd.GeoSeries(buffered_nodes_list)
     intersection_centroids = unified_intersections.centroid
     return intersection_centroids, mappings
@@ -487,7 +468,7 @@ def extend_edge_to_node(graph_, edge, tolerance=45):
     u, v = edge
     pts = graph.edges[u, v, 0]['pts']
     first_coords = np.array(pts[0, :])
-    second_coords = np.array(pts[-1, :])#np.array((graph.nodes[v]['o'][0], graph.nodes[v]['o'][1]))
+    second_coords = np.array(pts[-1, :])
 
     # Get the coordinates of the node to extend the edge to
     u_node_coords = np.array([graph.nodes[u]['o'][0], graph.nodes[u]['o'][1]]).reshape((1, 2))
@@ -495,7 +476,7 @@ def extend_edge_to_node(graph_, edge, tolerance=45):
 
     # match the nodes to the starting points of the edge
     if np.linalg.norm(abs(first_coords - u_node_coords)) < np.linalg.norm(abs(first_coords - v_node_coords)):
-        # instert u node cords at beginnging an v node cords at end
+        # insert u-node cords at beginning an v node cords at end
         if u_node_coords not in pts:
             pts = np.vstack((u_node_coords, pts))
 
@@ -503,48 +484,19 @@ def extend_edge_to_node(graph_, edge, tolerance=45):
             pts = np.vstack((pts, v_node_coords))
 
     elif np.linalg.norm(abs(first_coords - v_node_coords)) < np.linalg.norm(abs(first_coords - u_node_coords)):
-        # instert u node cords at end an v node cords at beginning
+        # insert u node cords at end and v node cords at beginning
         if v_node_coords not in pts:
             pts = np.vstack((v_node_coords, pts))
 
         if u_node_coords not in pts:
             pts = np.vstack((pts, u_node_coords))
 
-    """# Calculate the distance between the start and end nodes of the edge
-    #edge_length = nx.shortest_path_length(graph, u, v, 'weight')
-    # Calculate the distance between the start node of the edge and the node to extend to
-    #node_distance = nx.shortest_path_length(graph, u, node, 'weight')
-    # Calculate the ratio of the distance between the start node and the node to extend to
-    # to the distance between the start and end nodes of the edge
-    # handle length of 0 for edge cae graphs
-    #if edge_length == 0:
-    #    return graph
-    #ratio = node_distance / edge_length
-
-    # Insert the coordinates of the node into the pts array of the edge"""
-    """if u == node:
-        pts = np.vstack((node_coords, pts))
-    elif v == node:
-        pts = np.vstack((pts, node_coords))"""
-    """
-    else:
-        new_pt_coords = np.array([u_coords[0] + ratio * (v_coords[0] - u_coords[0]),
-                         u_coords[1] + ratio * (v_coords[1] - u_coords[1])]).reshape((1, 2))
-        pts = np.vstack((pts, new_pt_coords))
-        pts = np.vstack((pts, node_coords))"""
-
     # Update the edge attributes in the graph
     graph.edges[u, v, 0]['pts'] = pts
     return graph
 
 
-def graph_postprocessing(G, img, plot):
-    """
-        receives: Graph, corresponding image, boolean if result should be plotted
-        returns: postprocessed graph
-        applies postprocessing procedures: intersection reduction, node contraction, node-edge connection
-    """
-
+def graph_postprocessing(G, img, geo_img, plot):
     # remove small roundabaouts
     last_node = len(G.nodes)
     if last_node < 1:
@@ -573,6 +525,42 @@ def graph_postprocessing(G, img, plot):
     for u, v in G_new_2.edges():
         if u is not v:
             G_new_2 = extend_edge_to_node(G_new_2, (u, v))
+
+    geom = getGeom(geo_img)
+
+    new_G = copy.deepcopy(G_new_2)
+
+    remove_edges = []
+
+    for u, v, data in new_G.edges(data=True):
+        line = data['pts']
+
+        # chatch linestrings without a length of 2 points
+        if len(line) < 2:
+            remove_edges.append((u, v))
+            continue
+        # switch line as well
+
+        rdp_lines = rdp.rdp(line)
+        rdp_transformed = list()
+        # transform rdp_lines to crs
+
+        for i, x in enumerate(rdp_lines):
+            rdp_transformed.append(pixelToGeoCoord(xPix=x[1], yPix=x[0], geomTransform=geom))  # xPix=x[0], yPix=x[1]
+
+        data['geometry_pix'] = LineString(data['pts'])
+        data['geometry'] = LineString(rdp_transformed)
+        data['length'] = data['weight']
+
+    for u, v in remove_edges:
+        new_G.remove_edge(u, v)
+
+    for n, data in new_G.nodes(data=True):
+        coords = pixelToGeoCoord(xPix=data['o'][1], yPix=data['o'][0], geomTransform=geom)
+        data['x'] = coords[0]
+        data['y'] = coords[1]
+
+    # RDP Graaph simplification
 
     # Graph simplification overcomplicated everything
     """
@@ -608,8 +596,8 @@ def graph_postprocessing(G, img, plot):
             for val in vals:
                 ps = val.get('pts', [])
                 ax[1].plot(ps[:, 0], ps[:, 1], 'blue')
-        for (s, e) in G_new_2.edges():
-            vals = flatten([[v] for v in G_new_2[s][e].values()])
+        for (s, e) in new_G.edges():
+            vals = flatten([[v] for v in new_G[s][e].values()])
             for val in vals:
                 ps = val.get('pts', [])
                 ax[2].plot(ps[:, 0], ps[:, 1], 'blue')
@@ -617,25 +605,98 @@ def graph_postprocessing(G, img, plot):
         ax[0].plot(ps_[:, 0], ps_[:, 1], 'r.', markersize=4)
         ps_ = np.array([i[1]['o'] for i in G_new.nodes(data=True)])
         ax[1].plot(ps_[:, 0], ps_[:, 1], 'r.', markersize=4)
-        ps_ = np.array([i[1]['o'] for i in G_new_2.nodes(data=True)])
+        ps_ = np.array([i[1]['o'] for i in new_G.nodes(data=True)])
         ax[2].plot(ps_[:, 0], ps_[:, 1], 'r.', markersize=4)
 
         ax[0].set_title(f'Graph before postprocessing')
         ax[1].set_title(f'Graph after node contraction')
         ax[2].set_title(f'Graph after edge extension')
 
-        plt.savefig(f'{fp}/graphics/postprocessing/before_after_closeup.png')
+        plt.savefig('D:/SHollendonner/graphics/postprocessing/before_after_closeup.png')
         plt.show()
 
-    return G_new_2 #G_new_2simpl_rem
+
+    return new_G
+
+
+# def graph_postprocessing(G, img, plot):
+#     """
+#         receives: Graph, corresponding image, boolean if result should be plotted
+#         returns: postprocessed graph
+#         applies postprocessing procedures: intersection reduction, node contraction, node-edge connection
+#     """
+#
+#     # remove small roundabaouts
+#     last_node = len(G.nodes)
+#     if last_node < 1:
+#         print('no nodes detected')
+#         return G
+#     gdf, mappings = clean_intersections(G, dead_ends=True)
+#     all_new_nodes = []
+#
+#     for i, point in gdf.items():
+#         new_node = [point.x, point.y]
+#         all_new_nodes.append((last_node+i, {'pts': np.array([new_node], dtype='int16'), 'o': np.array(new_node)}))
+#
+#     # add new nodes
+#     G.add_nodes_from(all_new_nodes)
+#
+#     G_new = G.copy()
+#     for new_node, old_nodes in mappings.items():
+#         for old_node in old_nodes:
+#             G_new = nx.contracted_nodes(G_new, new_node, old_node, self_loops=False, copy=True)
+#
+#     # problem: edges are in theory connected, but pixels to nodes are not drawn
+#     # remove edges with length 0
+#     # G_new.remove_edges_from([(u, v) for u, v, attr in G_new.edges(data=True) if attr['weight'] <= 30])
+#
+#     G_new_2 = G_new.copy()
+#     for u, v in G_new_2.edges():
+#         if u is not v:
+#             G_new_2 = extend_edge_to_node(G_new_2, (u, v))
+#
+#     # Plot results
+#     if plot:
+#         fig, ax = plt.subplots(1, 3, figsize=(15, 5))
+#         for (s, e) in G.edges():
+#             vals = flatten([[v] for v in G[s][e].values()])
+#             for val in vals:
+#                 ps = val.get('pts', [])
+#                 ax[0].plot(ps[:, 0], ps[:, 1], 'blue')
+#         for (s, e) in G_new.edges():
+#             vals = flatten([[v] for v in G_new[s][e].values()])
+#             for val in vals:
+#                 ps = val.get('pts', [])
+#                 ax[1].plot(ps[:, 0], ps[:, 1], 'blue')
+#         for (s, e) in G_new_2.edges():
+#             vals = flatten([[v] for v in G_new_2[s][e].values()])
+#             for val in vals:
+#                 ps = val.get('pts', [])
+#                 ax[2].plot(ps[:, 0], ps[:, 1], 'blue')
+#         ps_ = np.array([i[1]['o'] for i in G.nodes(data=True)])
+#         ax[0].plot(ps_[:, 0], ps_[:, 1], 'r.', markersize=4)
+#         ps_ = np.array([i[1]['o'] for i in G_new.nodes(data=True)])
+#         ax[1].plot(ps_[:, 0], ps_[:, 1], 'r.', markersize=4)
+#         ps_ = np.array([i[1]['o'] for i in G_new_2.nodes(data=True)])
+#         ax[2].plot(ps_[:, 0], ps_[:, 1], 'r.', markersize=4)
+#
+#         ax[0].set_title(f'Graph before postprocessing')
+#         ax[1].set_title(f'Graph after node contraction')
+#         ax[2].set_title(f'Graph after edge extension')
+#
+#         plt.savefig(f'{fp}/graphics/postprocessing/before_after_closeup.png')
+#         plt.show()
+#
+#     return G_new_2
 
 
 def determine_overlap(img_size, wish_size):
     """
         receives: image size to split, size image is split into
         returns: list of tuples describing the indices to split an image along
-        calculates indices on whichan image has to be split
+        calculates indices on which an image has to be split
     """
+
     num_pics = int(np.ceil(img_size/wish_size))
     applied_step = int((num_pics * wish_size - img_size) / (num_pics - 1))
     overlap_indices = [(i*(wish_size-applied_step), (i+1)*wish_size - i*applied_step) for i in range(num_pics)]
@@ -645,10 +706,10 @@ def determine_overlap(img_size, wish_size):
 
 def stitch_overlap_images(sorted_images, result_path, overlap_params, old_segmentation_result, for_visual_output):
     """
-        receives: dict of sorted image names, path where to save resuls, dict with parameters describing overlpping,
+        receives: dict of sorted image names, path where to save resuls, dict with parameters describing overlapping,
             boolean for color allocation, boolean if result needs to be inspected visually
         returns: Tue, results are saved
-        stitches images back together, after being plit for segmentation
+        stitches images back together, after being split for segmentation
     """
 
     # images need to be binary
@@ -697,7 +758,8 @@ def stitch_overlap_images(sorted_images, result_path, overlap_params, old_segmen
                     img = arrays[i, j]
                     base[i_val[0]:i_val[1], j_val[0]:j_val[1]] += img
                 it += 1
-        base[base > 0] = output_color # 1: for binary, 255: for visual
+        # 1: for binary, 255: for visual
+        base[base > 0] = output_color
 
         # save files
         cv2.imwrite(f'{result_path}/{base_name}', base[:1300, :1300])
@@ -752,28 +814,14 @@ def getGeom(inputRaster, sourceSR='', geomTransform='', targetSR=''):
 def pixelToGeoCoord(xPix, yPix, geomTransform):
     """
         receives: xpixel, ypixel, geometry of the image
-        retruns: transformed tuple of coordinates
-        copied from the APLS metrics script
+        returns: transformed tuple of coordinates
+        copied and modified from the APLS metrics script
     """
-    # If you want to gauruntee lon lat output, specify TargetSR  otherwise, geocoords will be in image geo reference
+
+    # If you want to guarantee lon lat output, specify TargetSR  otherwise, geocoords will be in image geo reference
     # targetSR = osr.SpatialReference()
     # targetSR.ImportFromEPSG(4326)
     # Transform can be performed at the polygon level instead of pixel level
-
-    """if targetSR == '':
-        performReprojection = False
-        targetSR = osr.SpatialReference()
-        targetSR.ImportFromEPSG(4326)
-    else:
-        performReprojection = True
-
-    if geomTransform == '':
-        srcRaster = gdal.Open(inputRaster)
-        geomTransform = srcRaster.GetGeoTransform()
-
-        source_sr = osr.SpatialReference()
-        source_sr.ImportFromWkt(srcRaster.GetProjectionRef())
-    """
 
     # extract geometry
     geom = ogr.Geometry(ogr.wkbPoint)
@@ -787,21 +835,13 @@ def pixelToGeoCoord(xPix, yPix, geomTransform):
     yCoord = (yPix * pixelHeight) + yOrigin
     geom.AddPoint(xCoord, yCoord)
 
-    """if performReprojection:
-        if sourceSR == '':
-            srcRaster = gdal.Open(inputRaster)
-            sourceSR = osr.SpatialReference()
-            sourceSR.ImportFromWkt(srcRaster.GetProjectionRef())
-        coord_trans = osr.CoordinateTransformation(sourceSR, targetSR)
-        geom.Transform(coord_trans)"""
-
     return (geom.GetX(), geom.GetY())
 
 
 def plot_graph(G_p):
     """
         receives: graph
-        retruns: None
+        returns: None
         plots a graph
     """
 
@@ -824,7 +864,7 @@ def plot_graph(G_p):
 def convert_graph_to_geojson(G_g):
     """
         receives: graph
-        retruns: point features of graph, line features of graph
+        returns: point features of graph, line features of graph
         converts a graphs nodes and edges into a geojson
     """
 
@@ -848,8 +888,8 @@ def convert_graph_to_geojson(G_g):
 def convert_all_graphs_to_geojson(graph_path, RGB_image_path, MS_image_path, out_path, ms_bool):
     """
         receives: path to graphs, path to RGB images, path to MS images, saving path, boolean if input is MS or RGB
-        retruns: True, saves geojsons
-        converrt all graphs into georeferenced geojsons and save 3 files per graph
+        returns: True, saves geojsons
+        convert all graphs into georeferenced geojsons and save 3 files per graph
     """
 
     all_images = list()
@@ -897,7 +937,7 @@ def convert_all_graphs_to_geojson(graph_path, RGB_image_path, MS_image_path, out
                         coords.append(pixelToGeoCoord(point[1], point[0], geomTransform=geom))
                     attr_dict['coords'] = coords
 
-                point_features, linestring_features = convert_graph_to_geojson(G) #f'{image_path}{name}.png')
+                point_features, linestring_features = convert_graph_to_geojson(G)
 
                 feature_collection_points = geojson.FeatureCollection(point_features)
                 feature_collection_linestrings = geojson.FeatureCollection(linestring_features)
@@ -921,8 +961,8 @@ fp = 'D:/SHollendonner/'
 srt = time.time()
 
 for name in models:
+    print(f'Postprocessing model {name}')
     base_path = f'{fp}/segmentation_results/{name}/'
-    print(name)
     from_path_gt_masks = f'{fp}/not_tiled/mask_graphs_RGB/'
     if 'MS' in name:
         from_path_gt_masks = f'{fp}/not_tiled/mask_graphs_MS/'
@@ -935,7 +975,7 @@ for name in models:
     to_path_submissions = f'{fp}/segmentation_results/{name}/submissions/'
     to_path_geojsons = f'{fp}/segmentation_results/{name}/geojsons/'
     from_RGB_img_root = f'{fp}/data_3/'
-    from_MS_img_root = f'{fp}/data_3/' #'{fp}/multispectral/channels_257/images/'
+    from_MS_img_root = f'{fp}/data_3/'
 
     print('creating filesystem')
     if not os.path.exists(from_path_stitched):
@@ -955,12 +995,9 @@ for name in models:
     if not os.path.exists(f'{to_path_geojsons}/sub_geojsons/'):
         os.mkdir(f'{to_path_geojsons}/sub_geojsons/')
 
-    stitch = False
-    skeletonize = False
-    to_geojson = False
-    calc_F1 = False
-    calc_GED = False
-    calc_topo = True
+    stitch = True
+    skeletonize = True
+    to_geojson = True
 
     if stitch:
         print('sorting images')
@@ -971,12 +1008,11 @@ for name in models:
 
         print('stitch images')
         stitch_overlap_images(sorted_images=sorted_images,
-                          result_path=from_path_stitched,
-                          overlap_params=overlap,
-                          old_segmentation_result=False,
-                          for_visual_output=True)
+                              result_path=from_path_stitched,
+                              overlap_params=overlap,
+                              old_segmentation_result=False,
+                              for_visual_output=True)
 
-    # test apls metric with ground truth comparison graph
     if skeletonize:
         print('skeletonise results, create graphs, apply postprocessing')
         skeletonize_segmentations(image_path=from_path_stitched,
