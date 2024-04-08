@@ -17,13 +17,6 @@ def write_ms_image(image_name, out_path, channels, extract_channels=False):
         image = read_ms_image(image_name)
         save_image = image[:, :, channels]
 
-        """
-        if extract_channels:
-            save_image = image[:, :, channels]
-            # (cv2.normalize(, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX) * 255).astype('uint8')
-        else:
-            save_image = image[:, :, channels]"""
-
         cv2.imwrite(f'{out_path}/{save_name}.png', save_image)
 
     return
@@ -43,6 +36,3 @@ for img in tqdm(os.listdir(out_path8BIT)):
 stop = time.time()
 
 print(f'time of script running [s]: {round(stop - start, 2)}')
-
-# all_names8Bit = [out_path8BIT+img for img in os.listdir(out_path8BIT)]
-# write_channels_to_img(all_image_files=all_names8Bit, out_path=out_path, channels=[2, 5, 7], rescale=True)
