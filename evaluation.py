@@ -1,44 +1,15 @@
-import os
-from PIL import Image
 import json
-import geojson
-import math
-import cv2
-from skimage.morphology import skeletonize
+import os
 import pickle
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-import sknw
-import networkx as nx
-import geopandas as gpd
-import rdp
-from multiprocessing import Pool
-from multiprocessing import cpu_count
-from shapely.geometry import Polygon
-from shapely.geometry import Point
-from shapely.geometry import LineString
 import statistics
 import time
-import cv2
-import numpy as np
-import sknw
-# from pygeoif import LineString
-import shapely
-from scipy import ndimage
-from scipy.ndimage import binary_dilation
-from shapely.geometry import LineString, Point
-from simplification.cutil import simplify_coords
-from skimage.filters import gaussian
-from skimage.morphology import remove_small_objects, skeletonize
 # https://github.com/SpaceNetChallenge/RoadDetector/blob/0a7391f546ab20c873dc6744920deef22c21ef3e/selim_sef-solution/tools/vectorize.py
 import matplotlib.pyplot as plt
-import copy
-# from create_submission_selim import to_line_strings
+import networkx as nx
+import numpy as np
+from PIL import Image
 from sklearn.metrics.pairwise import euclidean_distances
-from osgeo import gdal, ogr, osr
-import shutil
-from scipy import ndimage
-import random
+from tqdm import tqdm
 
 
 def read_image(source):
