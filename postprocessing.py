@@ -21,6 +21,11 @@ from tqdm import tqdm
 
 
 def determine_overlap(img_size, wish_size):
+    """
+        receives: image size to split, size image is split into
+        returns: list of tuples describing the indices to split an image along
+        calculates indices on which an image has to be split
+    """
     num_pics = int(np.ceil(img_size / wish_size))
     applied_step = int((num_pics * wish_size - img_size) / (num_pics - 1))
     overlap_indices = [(i * (wish_size - applied_step), (i + 1) * wish_size - i * applied_step) for i in
@@ -29,6 +34,13 @@ def determine_overlap(img_size, wish_size):
 
 
 def stitch_overlap_images(sorted_images, result_path, overlap_params, old_segmentation_result, for_visual_output):
+    """
+        receives: dict of sorted image names, path where to save resuls, dict with parameters describing overlapping,
+            boolean for color allocation, boolean if result needs to be inspected visually
+        returns: Tue, results are saved
+        stitches images back together, after being split for segmentation
+    """
+
     # images need to be binary
     if old_segmentation_result:
         street_color = 207
@@ -46,13 +58,12 @@ def stitch_overlap_images(sorted_images, result_path, overlap_params, old_segmen
         base = np.zeros((1301, 1301))
         arrays = dict()
         base_name = img_paths[0].split('/')[-1]
-        # print(base_name)
 
         for img in img_paths:
             names = img.replace('.png', '').split('/')[-1].split('_')[-2:]
-            # print(names)
             ids = (int(names[0]), int(names[1]))
             image = Image.open(img)
+
             # rescale image to fit overlap parameter
             if image.size[0] != overlap_params[0][1]:
                 image = image.resize((overlap_params[0][1], overlap_params[0][1]))
@@ -67,7 +78,6 @@ def stitch_overlap_images(sorted_images, result_path, overlap_params, old_segmen
             ret_image = image_open.copy()
             ret_image[ret_image < street_color] = 0
             ret_image[ret_image >= street_color] = 1
-            # ret, bw_img = cv2.threshold(mask, street_color - 5, 1, cv2.THRESH_BINARY)
             arrays[ids] = ret_image
 
         # place arrays in big array
@@ -76,19 +86,24 @@ def stitch_overlap_images(sorted_images, result_path, overlap_params, old_segmen
             for j, j_val in enumerate(overlap_params):
                 if (i, j) in arrays.keys():
                     img = arrays[i, j]
-                    # print(i_val[0],i_val[1], j_val[0],j_val[1])
-                    # print(img.shape)
                     base[i_val[0]:i_val[1], j_val[0]:j_val[1]] += img
                 it += 1
+
         base[base > 0] = output_color  # 1: for binary, 255: for visual
         cv2.imwrite(f'{result_path}/{base_name}', base[:1300, :1300])
     return
 
 
 def sort_images(base_path):
+    """
+        receives: a path to results images
+        returns: dict with images sorted back together
+        sorts all files, to allocate split files back together
+    """
+
     ret_dict = dict()
-    # retrieve the image number from a string like this: 'AOI_2_Vegas_PS-RGB_img1_00_00.png' -> img1
     for name in tqdm(os.listdir(base_path)):
+        # retrieve the image number from a string like this: 'AOI_2_Vegas_PS-RGB_img1_00_00.png' -> img1
         ins_name = f'{name.split("_")[2]}_{name.split("_")[4]}'
         if ins_name in ret_dict.keys():
             ret_dict[ins_name].append(base_path + name)
@@ -97,13 +112,19 @@ def sort_images(base_path):
     return ret_dict
 
 
-def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilation=25,
-                    return_ske=False):  # , dilation=6 treshhold = 0.3
+def to_line_strings(mask, sigma=0.5, threshold=0.3, small_obj_size1=300, dilation=25,
+                    return_ske=False):
+    """
+        this function and all function used in it are adapted from selim_sef's solution to spacenet challenge 3
+        used for postprocessing stitched images and creating the spacenet challenge 3 submission file
+        https://github.com/SpaceNetChallenge/RoadDetector/blob/0a7391f546ab20c873dc6744920deef22c21ef3e/selim_sef-solution/tools/vectorize.py
+    """
+
     mask = gaussian(mask, sigma=sigma)
     mask = copy.deepcopy(mask)
 
-    mask[mask < threashold] = 0
-    mask[mask >= threashold] = 1
+    mask[mask < threshold] = 0
+    mask[mask >= threshold] = 1
     mask = np.array(mask, dtype="uint8")
     mask = cv2.copyMakeBorder(mask, 8, 8, 8, 8, cv2.BORDER_REPLICATE)
 
@@ -128,6 +149,7 @@ def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilati
     lines = []
     all_coords = []
     nodes = graph.nodes()
+
     # draw edges by pts
     for (s, e) in graph.edges():
         for k in range(len(graph[s][e])):
@@ -157,10 +179,8 @@ def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilati
                 coords.insert(0, end)
                 coords.append(start)
             coords = simplify_coords(coords, 2.0)
-            # print(coords)
             all_coords.append(coords)
 
-    # print(all_coords)
     for coords in all_coords:
         if len(coords) > 0:
             line_obj = LineString(coords)
@@ -170,7 +190,6 @@ def to_line_strings(mask, sigma=0.5, threashold=0.3, small_obj_size1=300, dilati
     new_lines = remove_duplicates(lines)
     new_lines = filter_lines(new_lines, calculate_node_count(new_lines))
     line_strings = [l.wkt for l in new_lines]
-    # lengths = [shapely.length(l) for l in new_lines]
     lengths = [l.length for l in new_lines]
 
     # return skeleton too
@@ -262,44 +281,23 @@ def cut(line, distance):
 
 def skeletonize_segmentations(image_path, save_submissions, save_graph, save_skeleton, save_mask, geoRGB_path,
                               geoMS_path, plot=False, single=False):
+    """
+        receives: data paths, save paths, booleans for plotting
+        returns: True, saves submission file, graph file, skeletonised result file
+        Applies post-processing steps to a segmentation result
+    """
+
     iterating = os.listdir(image_path)
-    all_files_done = os.listdir(save_graph)
     skel1 = time.time()
-
-    # create a list with all georefrenced imaegs
-    geo_images = {}
-    for image in iterating:
-        image_name = image[:-10]
-        folder_name = image_name.split('_PS-')[0]
-
-        geo_images[
-            image_name] = f'{geoRGB_path}/{folder_name}/PS-RGB_8bit/SN3_roads_train_{image_name.replace("MS", "RGB")}.tif'
-
-    print(geo_images)
-
-    """with Pool(processes=cpu_count()) as pool:
-        pool.map(multi_skeletonize_segmentations, zip(image_path, save_submissions, save_graph, save_skeleton, save_mask, geoRGB_path, geoMS_path, plot, single, iterating, geo_images))"""
 
     for image in tqdm(iterating):
         image_name = image[:-10]
-        if f'{image_name}.pickle' in os.listdir(save_graph):
-            print()
-            continue
-        # if f'{image_name}.pickle' in all_files_done:
-        #    continue
         img = np.asarray(Image.open(f'{image_path}/{image}'))
+
         # convert to skeleton and graph, apply morphologicals
-        linestrings, lens, final_img, final_graph, postproc_image = to_line_strings(mask=img, sigma=0.5, threashold=0.3,
+        linestrings, lens, final_img, final_graph, postproc_image = to_line_strings(mask=img, sigma=0.5, threshold=0.3,
                                                                                     small_obj_size1=600, dilation=4,
-                                                                                    return_ske=False)  # sigma=0.5 small_obj_size=350
-
-        geo_img = geo_images[image_name]
-
-        # # pickle graph
-        # pickle.dump(final_graph, open(f'D:/SHollendonner/segmentation_results/1305_512_unet_densenet201_MS_150epochs_small/graphs_not_postprocessed/{image_name}.pickle', 'wb'))
-        # continue
-        # apply graph postprocessing
-        # final_graph = graph_postprocessing(final_graph, final_img, geo_img, plot=plot)
+                                                                                    return_ske=False)
 
         # save old submission csv
         with open(f'{save_submissions}/{image_name}.csv', 'w') as file:
@@ -313,17 +311,21 @@ def skeletonize_segmentations(image_path, save_submissions, save_graph, save_ske
         # save skeleton
         cv2.imwrite(f'{save_skeleton}/{image_name}.png', final_img)
 
-        # save postprocessed image
-        # cv2.imwrite(f'{save_mask}/{image[:-10]}.png', final_mask)
-
         if single:
             break
+
     skel2 = time.time()
     print(f'finished postprocessing in {round(skel2 - skel1, 2)}s')
     return
 
 
 def convert_graph_to_geojson(G_g, edge_coordinate_feature_key='coords'):
+    """
+        receives: graph
+        returns: point features of graph, line features of graph
+        converts a graphs nodes and edges into a geojson
+    """
+
     point_features, linestring_features = [], []
 
     for node in G_g.nodes(data=True):
@@ -349,6 +351,11 @@ def convert_graph_to_geojson(G_g, edge_coordinate_feature_key='coords'):
 
 
 def getGeom(inputRaster, sourceSR='', geomTransform='', targetSR=''):
+    """
+        receives: input image, source spatial reference, transformation parameter, target spatial reference
+        returns: the inputs geometry
+        copied from the OSM library
+    """
     # from osmnx
     if targetSR == '':
         performReprojection = False
@@ -369,26 +376,15 @@ def getGeom(inputRaster, sourceSR='', geomTransform='', targetSR=''):
 
 
 def pixelToGeoCoord(xPix, yPix, geomTransform):
-    '''From spacenet geotools'''
+    """
+        receives: xpixel, ypixel, geometry of the image
+        returns: transformed tuple of coordinates
+        copied and modified from the APLS metrics script, which is based on spacenet geotools
+    """
     # If you want to gauruntee lon lat output, specify TargetSR  otherwise, geocoords will be in image geo reference
     # targetSR = osr.SpatialReference()
     # targetSR.ImportFromEPSG(4326)
     # Transform can be performed at the polygon level instead of pixel level
-
-    """if targetSR == '':
-        performReprojection = False
-        targetSR = osr.SpatialReference()
-        targetSR.ImportFromEPSG(4326)
-    else:
-        performReprojection = True
-
-    if geomTransform == '':
-        srcRaster = gdal.Open(inputRaster)
-        geomTransform = srcRaster.GetGeoTransform()
-
-        source_sr = osr.SpatialReference()
-        source_sr.ImportFromWkt(srcRaster.GetProjectionRef())
-    """
 
     geom = ogr.Geometry(ogr.wkbPoint)
     xOrigin = geomTransform[0]
@@ -400,20 +396,17 @@ def pixelToGeoCoord(xPix, yPix, geomTransform):
     yCoord = (yPix * pixelHeight) + yOrigin
     geom.AddPoint(xCoord, yCoord)
 
-    """if performReprojection:
-        if sourceSR == '':
-            srcRaster = gdal.Open(inputRaster)
-            sourceSR = osr.SpatialReference()
-            sourceSR.ImportFromWkt(srcRaster.GetProjectionRef())
-        coord_trans = osr.CoordinateTransformation(sourceSR, targetSR)
-        geom.Transform(coord_trans)"""
-
     return (geom.GetX(), geom.GetY())
 
 
 def convert_all_graphs_to_geojson(graph_path, RGB_image_path, MS_image_path, out_path, ms_bool,
                                   edge_coordinate_feature_key):
-    all_pickles = os.listdir(graph_path)
+    """
+        receives: path to graphs, path to RGB images, path to MS images, saving path, boolean if input is MS or RGB
+        returns: True, saves geojsons
+        convert all graphs into georeferenced geojsons and save 3 files per graph
+    """
+
     all_images = list()
     geosjon_time = time.time()
 
@@ -429,10 +422,6 @@ def convert_all_graphs_to_geojson(graph_path, RGB_image_path, MS_image_path, out
         if 'AOI' in folder:
             for img in os.listdir(f'{RGB_image_path}/{folder}/{img_type}/'):
                 all_images.append(f'{folder}/{img_type}/{img}')  # SN3_roads_train_
-    # else:
-    # image_path = MS_image_path
-    # for img in os.listdir(MS_image_path):
-    #     all_images.append(img)
 
     for img in tqdm(all_images):
         if not ms_bool:
@@ -465,6 +454,7 @@ def convert_all_graphs_to_geojson(graph_path, RGB_image_path, MS_image_path, out
 
                 feature_collection_points = geojson.FeatureCollection(point_features)
                 feature_collection_linestrings = geojson.FeatureCollection(linestring_features)
+
                 # Write GeoJSON to file
                 with open(f'{out_path}/qgis_geojsons/{name}_points.geojson', 'w') as f:
                     geojson.dump(feature_collection_points, f)
@@ -472,6 +462,7 @@ def convert_all_graphs_to_geojson(graph_path, RGB_image_path, MS_image_path, out
                     geojson.dump(feature_collection_linestrings, f)
                 with open(f'{out_path}/sub_geojsons/{name}.geojson', 'w') as f:
                     geojson.dump(geojson.FeatureCollection(point_features + linestring_features), f)
+
     geosjon_time2 = time.time()
     print(f'created geojsons in {round(geosjon_time2 - geosjon_time, 2)}s')
     return
@@ -499,7 +490,7 @@ for name in models:
     from_RGB_img_root = f'{fp}/data_3/'
     from_MS_img_root = f'{fp}/data_3/'
 
-    print('creating filesystem')
+    print('creating filesystem for postprocessing and evaluation')
     if not os.path.exists(from_path_stitched):
         os.mkdir(from_path_stitched)
     if not os.path.exists(to_path_skeletons):

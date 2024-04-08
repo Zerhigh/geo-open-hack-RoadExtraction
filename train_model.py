@@ -13,8 +13,8 @@ import random
 from utils import create_folder
 
 # enabling mixed precision, only works on GPU capability 7.0
-#from keras.mixed_precision import experimental as mixed_precision
-# current GPU has 6.1
+# currently used GPU has version 6.1
+# from keras.mixed_precision import experimental as mixed_precision
 # tf.keras.mixed_precision.set_global_policy("mixed_float16")
 # policy = mixed_precision.Policy('mixed_float16')
 # mixed_precision.set_policy(policy)
